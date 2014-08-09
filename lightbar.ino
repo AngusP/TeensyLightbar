@@ -51,9 +51,11 @@ static byte frameBuffer[PIXELS * 3];
 
 unsigned int datasize = 0;
 
-/* 
+/* Note that this should match void help()
 
    Open Pixel Control packet spec
+
+   UNIQUE CASE: 'help' will print a help text. (0x68 0x65 0x6C 0x70)
 
    |-------------|-------------|-------------|--------------------------------|
    | Channel     | Command     | Length (n)  | Data                           |
@@ -84,7 +86,6 @@ unsigned int datasize = 0;
    0x03  :  Set channel. Expects channel to listen on as a single byte.
    0x04  :  Get channel. Returns current channel (int) as human readable string.
    0x05  :  Toggle debug on or off. Informs with Human readable string.
-   0x06  :  Re print last debug message.
 */
 
 
@@ -130,15 +131,17 @@ void loop()
 	  rcvCmd   = header[1];
 	  dataSize = header[2] << 8 | header[3];
   
+	  if(header[0] == 'h' && header[1] == 'e' && header[2] == 'l' &&  header[3] == 'p') help();
+
 	  match = (dataSize == Serial.available());
 
 	  // Check that the header matches the packet:
 	  if (!match){
-	       Serial.printf("%d [ERROR] Packet header on channel %d did not match buffer size; Buffer was discarded.\n", millis(), rcvChan);
+	       Serial.printf("%d [ERROR] Packet header on channel %X did not match buffer size; Buffer was discarded.\n", millis(), rcvChan);
 	       if(debug) Serial.printf("%d [DEBUG] Header specified a size of %d bytes, got %d.\n", millis(), dataSize, Serial.available());
 	       discardSerial();
 	  } else if(debug){
-	       Serial.printf("%d [DEBUG] Channel: %d Command: %d Data Packet size: %d bytes.\n", millis(), rcvChan, rcvCmd, dataSize);
+	       Serial.printf("%d [DEBUG] Channel: %X Command: %X Data Packet size: %d bytes.\n", millis(), rcvChan, rcvCmd, dataSize);
 	  }
   
 	  // If Broadcast or our Channel
@@ -177,6 +180,7 @@ void loop()
 			 // Get time
 		    case 0x02:
 			 Serial.printf("%d [OUT] Currently held time is %d seconds since UNIX epoch.\n", millis(), now());
+			 Serial.printf("%d [OUT] This gives a datetime of %d-%d-%d %d:%d:%d\n", millis(), year(), month(), day(), hour(), minute(), second());
 			 break;
 
 			 // Set Channel
@@ -185,25 +189,19 @@ void loop()
 			      channel = Serial.read();
 			      if (debug) Serial.printf("%d [DEBUG] Changed channel to %d \n", millis(), channel);
 			 } else {
-			      if (debug) Serial.printf("%d [ERROR] Incorrect number of bytes in buffer, expected one.\n", millis()); 
+			      Serial.printf("%d [ERROR] Incorrect number of bytes in buffer, expected one.\n", millis()); 
 			 }
 			 break;
         
 			 // Get Channel
 		    case 0x04:
-			 Serial.printf("%d [OUT] Currently listening on Channel %d and Broadcast, 0x00\n", millis(), channel);
+			 Serial.printf("%d [OUT] Currently listening on Channel 0x%X and Broadcast, 0x00\n", millis(), channel);
 			 break;
 
 			 // Toggle debug
 		    case 0x05:
 			 debug = !debug;
-			 Serial.printf("%d [DEBUG] Toggled debug to: %d.\n", millis(), debug);
-			 break;
-
-			 // Re print last debug message
-		    case 0x06:
-			 Serial.printf("%d [OUT] Last Degug Message:", millis());
-			 Serial.print(lastdbg);
+			 Serial.printf("%d [DEBUG] Toggled debug to: %s.\n", millis(), debug ? "on" : "off");
 			 break;
 			 
 			 // Default to nothing
@@ -234,7 +232,7 @@ void writeFrame()
 	  which++;
      }
      strip.show();
-     if (debug) Serial.printf("%d [DEBUG] Wrote frame at %ld.\n", millis(), now());
+     if (debug) Serial.printf("%d [DEBUG] Wrote frame at %d:%d:%d.\n", millis(), hour(), minute(), second());
      lastframe = now();
 }
 
@@ -383,4 +381,43 @@ void dprint(String message, ...)
      
      if(debug) Serial.print(message);
      lastdbg = message;
+}
+
+
+void help()
+{
+     Serial.println(
+	  "Open Pixel Control packet spec\n"
+	  "\n"
+	  "   UNIQUE CASE: 'help' will print a help text. (0x68 0x65 0x6C 0x70)\n"
+	  "\n"
+	  "   |-------------|-------------|-------------|--------------------------------|\n"
+	  "   | Channel     | Command     | Length (n)  | Data                           |\n"
+	  "   |-------------|-------------|-------------|--------------------------------|\n"
+	  "   | 0x00 - 0xFF | 0x00 - 0xFE | MSB  |  LSB | n bytes of message data        |\n"
+	  "   |-------------|-------------|------|------|------------|------------|------|\n"
+	  "   | 0x00 - 0xFF | 0xFF        | MSB  |  LSB | SysID MSB  |  SysID LSB | Data |\n"
+	  "   |-------------|-------------|------|------|------------|------------|------|\n"
+	  "\n"
+	  "   Command:\n"
+	  "   0   : 0x00 : Set Pixel Colours\n"
+	  "   255 : 0xFF : System Exclusive\n"
+	  "   - The first two bytes of the Data block should be the SYSTEM_ID,\n"
+	  "   Unique to this device. 0x0001 is reserved for the FadeCandy.\n"
+	  "\n"
+	  "   Length:\n"
+	  "   Exact length of the Data block, in bytes, range of 0 - 65535.\n"
+	  "   For command 0 (Set Pixel Colours) the Data block will be 3 * numPixels.\n"
+	  "\n"
+	  "   Data:\n"
+	  "   Contains n bytes of data\n"
+	  "   If the command was SysEx, the first two bytes are the system ID\n"
+	  "\n"
+	  "   SYSTEM EXCLUSIVES:\n"
+	  "   0x01  :  Set time. Expects UNIX epoch time in bytes.\n"
+	  "   0x02  :  Get time. Returns current time as a human readable string.\n"
+	  "   0x03  :  Set channel. Expects channel to listen on as a single byte.\n"
+	  "   0x04  :  Get channel. Returns current channel (int) as human readable string.\n"
+	  "   0x05  :  Toggle debug on or off. Informs with Human readable string.\n"
+	  );
 }
