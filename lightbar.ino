@@ -40,8 +40,8 @@ uint16_t dataSize = 0;
 const int timeout = 10000;
 time_t lastframe = 0;
 
-// Set the default time to 2014-01-01T00:00+0
-const time_t dtime = 1388534400;
+// Set the default time to 1970-01-01 00:00 UTC
+const time_t dtime = 0;
 
 // 4 Byte header to store Channel, Command & Length
 byte header[4] = {0, 255, 0, 0};
@@ -68,8 +68,9 @@ unsigned int datasize = 0;
    Command:   
    0   : 0x00 : Set Pixel Colours
    255 : 0xFF : System Exclusive
-   - The first two bytes of the Data block should be the SYSTEM_ID,
-   Unique to this device. 0x0001 is reserved for the FadeCandy.
+   - The first two bytes of the Data block in the case of the system exclusive
+     command should be the SYSTEM_ID, unique to this device. This system has ID
+     0xEDED. The ID 0x0001 is reserved for the FadeCandy.
 
    Length:
    Exact length of the Data block, in bytes, range of 0 - 65535.
@@ -112,7 +113,7 @@ void setup()
      if (timeStatus() != timeSet) {
 	  Serial.printf("%d [ERROR] Unable to sync with the RTC.\n", millis());
      } else {
-	  if (debug) Serial.printf("%d [DEBUG] RTC has set the system time.\n", millis());
+	  if (debug) Serial.printf("%d [DEBUG] RTC has set the system time to %d-%d-%d %d:%d:%d.\n", millis(), year(), month(), day(), hour(), minute(), second());
      }
 }
 
@@ -340,7 +341,7 @@ time_t timeSync()
 	  tmp = Serial.read();
 	  pctime = (pctime << 8) | tmp;
      }
-     if (debug) Serial.printf("%d [DEBUG] timeSync read the number %d from Serial.\n", millis(), pctime);
+     if (debug) Serial.printf("%d [DEBUG] timeSync read the number %d (0x%X) from Serial.\n", millis(), pctime, pctime);
      if(dtime > pctime){
 	  pctime = 0L;
      } else {
@@ -384,10 +385,13 @@ void dprint(String message, ...)
 }
 
 
+/** /-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\ **/
+
+
 void help()
 {
      Serial.println(
-	  "Open Pixel Control packet spec\n"
+	  "   THIS IS A HELP TEXT, Printed on the input of ASCII 'help'\n"
 	  "\n"
 	  "   UNIQUE CASE: 'help' will print a help text. (0x68 0x65 0x6C 0x70)\n"
 	  "\n"
@@ -402,8 +406,9 @@ void help()
 	  "   Command:\n"
 	  "   0   : 0x00 : Set Pixel Colours\n"
 	  "   255 : 0xFF : System Exclusive\n"
-	  "   - The first two bytes of the Data block should be the SYSTEM_ID,\n"
-	  "   Unique to this device. 0x0001 is reserved for the FadeCandy.\n"
+	  "   - The first two bytes of the Data block in the case of the system exclusive\n"
+	  "     command should be the SYSTEM_ID, unique to this device. This system has ID\n"
+	  "     0xEDED. The ID 0x0001 is reserved for the FadeCandy.\n"
 	  "\n"
 	  "   Length:\n"
 	  "   Exact length of the Data block, in bytes, range of 0 - 65535.\n"
@@ -419,5 +424,7 @@ void help()
 	  "   0x03  :  Set channel. Expects channel to listen on as a single byte.\n"
 	  "   0x04  :  Get channel. Returns current channel (int) as human readable string.\n"
 	  "   0x05  :  Toggle debug on or off. Informs with Human readable string.\n"
+	  "\n"
+	  "   You may disregard any errors as the program will attempt to process 'help'\n"
 	  );
 }
