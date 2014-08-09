@@ -21,6 +21,10 @@ Adafruit_NeoPixel strip = Adafruit_NeoPixel(PIXELS, PIN, NEO_GRB + NEO_KHZ800);
 
 // Suggest true for development, false for production
 boolean debug = true;
+String lastdbg = "";
+
+// Did the header declaration match the buffer size?
+boolean match = true;
 
 // Which channel we're listening on. 0 = Broadcast, Range 1 - 255
 byte channel = 1;
@@ -80,6 +84,7 @@ unsigned int datasize = 0;
    0x03  :  Set channel. Expects channel to listen on as a single byte.
    0x04  :  Get channel. Returns current channel (int) as human readable string.
    0x05  :  Toggle debug on or off. Informs with Human readable string.
+   0x06  :  Re print last debug message.
 */
 
 
@@ -125,8 +130,10 @@ void loop()
 	  rcvCmd   = header[1];
 	  dataSize = header[2] << 8 | header[3];
   
+	  match = (dataSize == Serial.available());
+
 	  // Check that the header matches the packet:
-	  if (dataSize != Serial.available()){
+	  if (!match){
 	       Serial.printf("%d [ERROR] Packet header on channel %d did not match buffer size; Buffer was discarded.\n", millis(), rcvChan);
 	       if(debug) Serial.printf("%d [DEBUG] Header specified a size of %d bytes, got %d.\n", millis(), dataSize, Serial.available());
 	       discardSerial();
@@ -135,7 +142,7 @@ void loop()
 	  }
   
 	  // If Broadcast or our Channel
-	  if (rcvChan == 0 || rcvChan == channel){
+	  if ((rcvChan == 0 || rcvChan == channel) && match){
       
 	       // Command to write pixels.
 	       if (rcvCmd == 0){
@@ -192,7 +199,13 @@ void loop()
 			 debug = !debug;
 			 Serial.printf("%d [DEBUG] Toggled debug to: %d.\n", millis(), debug);
 			 break;
-        
+
+			 // Re print last debug message
+		    case 0x06:
+			 Serial.printf("%d [OUT] Last Degug Message:", millis());
+			 Serial.print(lastdbg);
+			 break;
+			 
 			 // Default to nothing
 		    default:
 			 if (debug) Serial.printf("%d [WARNING] No valid command found in Serial buffer after Header indicated system exclusive command to follow.\n", millis());
@@ -357,4 +370,17 @@ void discardSerial()
      while(Serial.available() > 0){
 	  Serial.read();
      }
+}
+
+
+/** /-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\ **/
+
+
+void dprint(String message, ...)
+{
+     va_list list;
+     int i = 0;
+     
+     if(debug) Serial.print(message);
+     lastdbg = message;
 }
