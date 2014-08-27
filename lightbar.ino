@@ -31,9 +31,8 @@ int mode = 0;
 /** Modes:
  * 0: Listen for input
  * 1: Cycle Rainbow
- * 2: Colour Temp constant (takes temperature as argument (default below))
+ * 2: All on (Full white)
  **/
-uint32_t temperature = 4000;
 
 // Which channel we're listening on. 0 = Broadcast, Range 1 - 255
 byte channel = 1;
@@ -158,13 +157,14 @@ void loop()
 	    if(debug){
 		Serial.printf("%d [DEBUG] Header specified a size of 0x%X (0d%d) bytes, got 0x%X (0d%d).\n", millis(), dataSize, dataSize, Serial.available(), Serial.available());
 	    }
-	    discardSerial();
+	    //discardSerial();
 	} else if(debug){
 	    Serial.printf("%d [DEBUG] Channel: 0x%X Command: 0x%X Data Packet size: %d bytes.\n", millis(), rcvChan, rcvCmd, dataSize);
 	}
 	
 	// If Broadcast or our Channel
-	if ((rcvChan == 0 || rcvChan == channel) && match){
+	//if ((rcvChan == 0 || rcvChan == channel) && match){
+	if (rcvChan == 0 || rcvChan == channel){
 	    
 	    // Command to write pixels.
 	    if (rcvCmd == 0){
@@ -228,16 +228,35 @@ void loop()
 		case 0x06:
 		    if(Serial.available() == 1){
 			mode = Serial.read();
-			if(debug) Serial.printf("%d [DEBUG] Set mode to 0x%X.", millis(), mode);
+			if(debug) Serial.printf("%d [DEBUG] Set mode to 0x%X.\n", millis(), mode);
 		    } else {
-			Serial.printf("%d [ERROR] Expect one byte after command to set mode", millis());
+			Serial.printf("%d [ERROR] Expect one byte after command to set mode\n", millis());
 		    }
 		    break;
 		    
 		    // Get Mode
 		case 0x07:
-		    Serial.printf("%d [OUT] Current Mode is %d", millis(), mode);
+		    Serial.printf("%d [OUT] Current Mode is %d\n", millis(), mode);
 		    break;
+
+
+		    // Dump frame buffer pixels
+		case 0x08:
+		    if(Serial.available() == 1){
+			uint8_t pixels = Serial.read();
+			Serial.printf("%d [OUT] Dumping %d pixels from buffer\n", millis, pixels);
+			unsigned int i = 0;
+			while(pixels > 0){
+			    Serial.printf("%d:%X%X%X ", pixels, frameBuffer[i], frameBuffer[i+1], frameBuffer[i+2]);
+			    i += 3;
+			    pixels--;
+			}
+			Serial.print("\n");
+		    } else {
+			if(debug) Serial.printf("%d [DEBUG] No number of bytes to dump specified.\n", millis());
+		    }
+		    
+		    
 		    
 		    // Default to nothing
 		default:
@@ -257,15 +276,13 @@ void loop()
     
     switch (mode) {
     case 1:
-	rainbow(40);
+	if(!Serial.available()) rainbow(40);
 	break;
 	
     case 2:
 	if(lock != 0x01){
-	    for(int i=0; i<sizeof(frameBuffer); i+=3){
-		frameBuffer[i]   = (byte) colourTemp(temperature) >> 16;
-		frameBuffer[i+1] = (byte) colourTemp(temperature) >> 8;
-		frameBuffer[i+2] = (byte) colourTemp(temperature);
+	    for(int i=0; i<sizeof(frameBuffer); i++){
+		frameBuffer[i]   = 0xFF;
 	    }
 	    writeFrame();
 	    lock = 0x01;
@@ -300,7 +317,7 @@ void fillBuffer(uint16_t packetSize)
     if(packetSize >= sizeof(frameBuffer)) packetSize = sizeof(frameBuffer);
     
     int i=0;
-    while( Serial.available() > packetSize ){
+    while( Serial.available() >= packetSize ){
 	frameBuffer[i] = Serial.read();
 	i++; // Next byte in the buffer
 	packetSize--; // Remaining bytes to read
@@ -316,9 +333,9 @@ void rainbow(uint8_t wait)
 {
     uint16_t i, j;
     
-    for(j=0; j<256*5; j++) { // 5 cycles of all colors on wheel
-	for(i=0; i< strip.numPixels(); i++) {
-	    strip.setPixelColor(i, Wheel(((i * 256 / strip.numPixels()) + j) & 255));
+    for(j=0; j<256; j++) {
+	for(i=0; i<strip.numPixels(); i++) {
+	    strip.setPixelColor(i, Wheel(((i * 256)+j) & 255));
 	}
 	strip.show();
 	delay(wait);
