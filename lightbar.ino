@@ -103,6 +103,7 @@ unsigned int datasize = 0;
    0x05  :  Toggle debug on or off. Informs with Human readable string.
    0x06  :  Set the mode. 0=Listen, 1=Light, 2=Spectrum
    0x07  :  Get mode. Prints mode (int) to serial
+   0x08  :  Dump pixel RGB values. Takes 1 byte as number to dump
 */
 
 
@@ -115,11 +116,14 @@ void setup()
     digitalWrite(13, HIGH);
     
     Serial.begin(115200);
-    while(!Serial);
     
+    clearBuff();
+
     strip.begin();
     strip.show();
     
+    test();
+
     // Initialise the pixel buffer to zeros
     for(int i=0; i<sizeof(frameBuffer); i++){
 	frameBuffer[i] = 0;
@@ -229,6 +233,8 @@ void loop()
 		    if(Serial.available() == 1){
 			mode = Serial.read();
 			if(debug) Serial.printf("%d [DEBUG] Set mode to 0x%X.\n", millis(), mode);
+			clearBuff();
+			writeFrame();
 		    } else {
 			Serial.printf("%d [ERROR] Expect one byte after command to set mode\n", millis());
 		    }
@@ -247,7 +253,7 @@ void loop()
 			Serial.printf("%d [OUT] Dumping %d pixels from buffer\n", millis, pixels);
 			unsigned int i = 0;
 			while(pixels > 0){
-			    Serial.printf("%d:%X%X%X ", pixels, frameBuffer[i], frameBuffer[i+1], frameBuffer[i+2]);
+			    Serial.printf("%d:%X%X%X\n", i/3, frameBuffer[i], frameBuffer[i+1], frameBuffer[i+2]);
 			    i += 3;
 			    pixels--;
 			}
@@ -255,7 +261,7 @@ void loop()
 		    } else {
 			if(debug) Serial.printf("%d [DEBUG] No number of bytes to dump specified.\n", millis());
 		    }
-		    
+		    break;
 		    
 		    
 		    // Default to nothing
@@ -276,7 +282,7 @@ void loop()
     
     switch (mode) {
     case 1:
-	if(!Serial.available()) rainbow(40);
+	if(!Serial.available()) rainbow(80);
 	break;
 	
     case 2:
@@ -298,7 +304,7 @@ void loop()
 void writeFrame()
 {
     which = 0;
-    for(int i=0; i<sizeof(frameBuffer); i+= 3){
+    for(int i=0; i<(PIXELS *3); i+= 3){
 	strip.setPixelColor(which, frameBuffer[i], frameBuffer[i+1], frameBuffer[i+2]);
 	which++;
     }
@@ -314,7 +320,7 @@ void writeFrame()
 
 void fillBuffer(uint16_t packetSize)
 {
-    if(packetSize >= sizeof(frameBuffer)) packetSize = sizeof(frameBuffer);
+    if(packetSize >= (PIXELS *3)) packetSize = PIXELS *3;
     
     int i=0;
     while( Serial.available() >= packetSize ){
@@ -323,7 +329,7 @@ void fillBuffer(uint16_t packetSize)
 	packetSize--; // Remaining bytes to read
     }
     // Discard the remainder of the buffer:
-    discardSerial();    
+    discardSerial();
 }
 
 
@@ -465,6 +471,28 @@ time_t getRTCTime()
 /** /-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\ **/
 
 
+void test()
+{
+    // Array of colours to wipe
+    static uint32_t tcol[8] = { 0xFF0000, 0x00FF00, 0x0000FF, 0xFF00FF, 0x00FFFF, 0xFFFF00, 0xFFFFFF, 0x000000 };
+    for(int i=0; i<8; i++){
+	for(int j=0; j<PIXELS; j++){
+	    strip.setPixelColor(j, tcol[i]);
+	}
+	strip.show();
+	delay(200);
+    }
+}
+
+void clearBuff()
+{
+    for(int i=0; i<(PIXELS*3); i++) frameBuffer[i] = 0x00;
+}
+
+
+/** /-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\|/-\ **/
+
+
 void discardSerial()
 {
     while(Serial.available() > 0) Serial.read();
@@ -490,6 +518,7 @@ void dprint(String message, ...)
 void help()
 {
     Serial.println(
+	"\n"
 	"   THIS IS A HELP TEXT, Printed on the input of ASCII 'help'\n"
 	"\n"
 	"   UNIQUE CASE: 'help' will print a help text. (0x68 0x65 0x6C 0x70)\n"
@@ -525,6 +554,7 @@ void help()
 	"   0x05  :  Toggle debug on or off. Informs with Human readable string.\n"
 	"   0x06  :  Set the mode. 0=Listen, 1=Light, 2=Spectrum\n"
 	"   0x07  :  Get mode. Prints mode (int) to serial\n"
+	"   0x08  :  Dump pixel RGB values. Takes 1 byte as number to dump\n"
 	"\n"
 	"   You may disregard any errors as the program will attempt to process 'help'\n"
 	);
